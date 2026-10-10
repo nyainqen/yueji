@@ -1,4 +1,4 @@
-const CACHE_NAME = 'yueji-v2';
+const CACHE_NAME = 'yueji-v3';
 const urlsToCache = ['./index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (event) => {
