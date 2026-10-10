@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>月迹 · 云同步版</title>
+<meta name="theme-color" content="#d44c7c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="月迹">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
+  body { background:#f8f5f7; display:flex; justify-content:center; align-items:center; min-height:100vh; padding:12px; }
+  .app { width:100%; max-width:400px; height:780px; max-height:95vh; background:#fff; border-radius:36px;
+         box-shadow:0 20px 40px rgba(0,0,0,0.08); display:flex; flex-direction:column; overflow:hidden;
+         border:1px solid rgba(255,200,220,0.5); }
+  .status-bar { height:44px; background:#fff; display:flex; align-items:center; justify-content:space-between;
+                padding:0 20px; font-size:14px; font-weight:500; color:#3d2c3b; border-bottom:1px solid #f0e4ea; }
+  .main-content { flex:1; overflow-y:auto; padding:16px 18px 10px; }
+  .main-content::-webkit-scrollbar { width:4px; }
+  .main-content::-webkit-scrollbar-thumb { background:#e0c8d2; border-radius:20px; }
+  .tab-bar { display:flex; height:70px; background:#fff; border-top:1px solid #f0e4ea; padding:6px 0; }
+  .tab-item { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px;
+              font-size:12px; color:#a48a98; cursor:pointer; border:none; background:none; }
+  .tab-item.active { color:#d44c7c; font-weight:500; }
+  .tab-item svg { width:24px; height:24px; stroke:currentColor; fill:none; stroke-width:1.8; }
+  .page { display:none; flex-direction:column; gap:16px; }
+  .page.active { display:flex; }
+  .card { background:#fff; border-radius:24px; padding:18px 16px; box-shadow:0 4px 16px rgba(210,160,180,0.12);
+          border:1px solid #f5e6ec; }
+  .card-title { font-size:16px; font-weight:600; color:#3d2c3b; margin-bottom:12px; display:flex;
+                justify-content:space-between; align-items:center; }
+  .badge { background:#fce4ec; color:#b34167; font-size:12px; padding:4px 10px; border-radius:20px; font-weight:500; }
+  .btn { border:none; border-radius:40px; padding:12px 18px; font-size:15px; font-weight:500; cursor:pointer;
+         background:#fce4ec; color:#b34167; display:inline-flex; align-items:center; justify-content:center; gap:8px; }
+  .btn-primary { background:#d44c7c; color:#fff; box-shadow:0 4px 12px rgba(212,76,124,0.3); }
+  .btn-outline { background:transparent; border:1.5px solid #f0c0d0; color:#b34167; }
+  .btn-sm { padding:8px 14px; font-size:13px; border-radius:30px; }
+  .btn-block { width:100%; }
+  .progress-bar-bg { height:8px; background:#f5e0e8; border-radius:10px; overflow:hidden; margin:10px 0 6px; }
+  .progress-fill { height:100%; background:#d44c7c; border-radius:10px; width:0%; transition:width 0.3s; }
+  .day-count { font-size:28px; font-weight:700; color:#d44c7c; }
+  .day-label { font-size:14px; color:#8f6f7e; margin-left:6px; }
+  .product-row { display:flex; gap:8px; margin:14px 0 8px; flex-wrap:wrap; }
+  .product-btn { flex:1; min-width:70px; padding:10px 0; border-radius:30px; border:1.5px solid #f0d8e2;
+                 background:#fff; font-size:13px; font-weight:500; color:#6f4f5e; cursor:pointer; }
+  .product-btn.selected { background:#fce4ec; border-color:#d44c7c; color:#b34167; font-weight:600; }
+  .time-input { flex:1; min-width:110px; padding:10px 12px; border-radius:30px; border:1.5px solid #f0d8e2;
+                background:#fff; font-size:14px; outline:none; }
+  .time-input:focus { border-color:#d44c7c; }
+  .timeline { margin-top:16px; display:flex; flex-direction:column; gap:10px; }
+  .timeline-item { display:flex; align-items:center; justify-content:space-between; background:#fdf7fa;
+                   padding:10px 12px; border-radius:16px; font-size:14px; border:1px solid #f5e6ec; }
+  .timeline-time { font-weight:500; color:#b34167; }
+  .timeline-product { background:#f5e0e8; padding:2px 10px; border-radius:20px; font-size:12px; color:#7d4f61; }
+  .icon-btn { background:none; border:none; font-size:16px; cursor:pointer; color:#bda2b0; padding:0 4px; }
+  .countdown-number { font-size:42px; font-weight:700; color:#d44c7c; line-height:1.1; }
+  .predicted-date { font-size:15px; color:#3d2c3b; background:#fdf0f5; padding:8px 14px; border-radius:30px;
+                    display:inline-block; margin-top:8px; }
+  .calendar-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
+  .calendar-grid { display:grid; grid-template-columns:repeat(7, 1fr); gap:6px; text-align:center; font-size:14px; }
+  .weekday { color:#bda2b0; font-size:12px; font-weight:500; padding:6px 0; }
+  .calendar-day { aspect-ratio:1; display:flex; align-items:center; justify-content:center; border-radius:30px;
+                  font-size:14px; font-weight:500; color:#3d2c3b; cursor:pointer; background:transparent;
+                  border:1.5px solid transparent; line-height:1; }
+  .calendar-day.period-solid { background:#d44c7c; color:#fff; font-weight:600; border-color:#d44c7c; }
+  .calendar-day.predicted { border:1.5px dashed #d44c7c; color:#b34167; background:#fff5f9; }
+  .calendar-day.today { box-shadow:0 0 0 2px #f8bbd0; font-weight:700; border-color:#f8bbd0; }
+  .calendar-day.empty { color:#ddd0d7; cursor:default; }
+  .stats-row { display:flex; gap:10px; margin-top:6px; }
+  .stat-item { flex:1; background:#fdf7fa; border-radius:20px; padding:14px 8px; text-align:center;
+               border:1px solid #f0e0e8; }
+  .stat-value { font-size:24px; font-weight:700; color:#d44c7c; }
+  .stat-label { font-size:12px; color:#8f6f7e; margin-top:4px; }
+  .history-form { display:flex; gap:8px; align-items:center; margin-top:8px; flex-wrap:wrap; }
+  .history-form input { flex:1; min-width:110px; padding:10px 12px; border-radius:30px; border:1px solid #eedae3;
+                        font-size:14px; background:#fefafc; outline:none; }
+  .history-list { margin-top:12px; display:flex; flex-direction:column; gap:8px; }
+  .history-item { display:flex; justify-content:space-between; align-items:center; background:#fdf7fa;
+                  padding:10px 12px; border-radius:16px; font-size:13px; border:1px solid #f0e0e8; }
+  .history-item .cycle-length { font-size:12px; color:#b34167; background:#fce4ec; padding:2px 8px;
+                                border-radius:20px; margin-left:6px; }
+  .history-actions button { background:none; border:none; color:#bda2b0; font-size:16px; cursor:pointer; padding:0 4px; }
+  .empty-text { color:#bda2b0; font-size:14px; text-align:center; padding:16px 0; }
+  .text-small { font-size:13px; color:#8f6f7e; }
+  .calendar-actions { display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
+  .calendar-actions .btn { flex:1; min-width:100px; }
+  .hidden { display:none !important; }
+
+  /* 登录页 */
+  .auth-wrap { width:100%; max-width:380px; background:#fff; border-radius:24px; padding:28px 22px;
+               box-shadow:0 10px 30px rgba(210,160,180,0.15); border:1px solid #f5e6ec; }
+  .auth-wrap h1 { font-size:22px; color:#3d2c3b; margin-bottom:6px; text-align:center; }
+  .auth-wrap .sub { font-size:13px; color:#8f6f7e; text-align:center; margin-bottom:22px; }
+  .auth-wrap input { width:100%; padding:12px 14px; border-radius:14px; border:1.5px solid #f0d8e2;
+                     font-size:15px; margin-bottom:12px; outline:none; }
+  .auth-wrap input:focus { border-color:#d44c7c; }
+  .auth-wrap button { width:100%; padding:13px; border-radius:40px; border:none; font-size:15px; font-weight:500;
+                      cursor:pointer; background:#d44c7c; color:#fff; box-shadow:0 4px 12px rgba(212,76,124,0.3); }
+  .auth-wrap .link { text-align:center; font-size:13px; color:#b34167; margin-top:14px; cursor:pointer; }
+  .auth-wrap .msg { text-align:center; font-size:13px; margin-top:12px; min-height:18px; }
+  .msg.error { color:#c0392b; }
+  .msg.ok { color:#27ae60; }
+  .logout-link { font-size:13px; color:#b34167; cursor:pointer; }
+</style>
+</head>
+<body>
+
+<!-- ========== 登录界面 ========== -->
+<div class="auth-wrap" id="authCard">
+  <h1>月迹</h1>
+  <div class="sub" id="authSub">登录你的账号，数据云端同步</div>
+  <input type="email" id="emailInput" placeholder="邮箱" autocomplete="email">
+  <input type="password" id="passwordInput" placeholder="密码（至少 6 位）" autocomplete="current-password">
+  <button id="loginBtn">登录</button>
+  <button id="signupBtn" class="hidden" style="background:#fce4ec;color:#b34167;box-shadow:none;margin-top:10px;">注册新账号</button>
+  <div class="link" id="toggleMode">没有账号？去注册</div>
+  <div class="msg" id="authMsg"></div>
+</div>
+
+<!-- ========== 主 App ========== -->
+<div class="app hidden" id="appRoot">
+  <div class="status-bar">
+    <span>月迹</span>
+    <span class="logout-link" id="logoutBtn">退出登录</span>
+  </div>
+
+  <div class="main-content" id="mainContent">
+    <!-- 今天 -->
+    <div class="page active" id="pageToday">
+      <div class="card" id="periodActiveCard" style="display:none;">
+        <div class="card-title"><span>经期进行中</span><span class="badge" id="periodBadge">第1天</span></div>
+        <div style="display:flex; align-items:baseline;">
+          <span class="day-count" id="periodDay">1</span><span class="day-label">天</span>
+        </div>
+        <div class="progress-bar-bg"><div class="progress-fill" id="periodProgressFill" style="width:20%;"></div></div>
+        <div style="display:flex; justify-content:space-between;" class="text-small">
+          <span id="periodStartLabel">开始于 4月1日</span>
+          <span id="periodEndLabel">预计 5天后结束</span>
+        </div>
+        <button class="btn btn-primary btn-block" id="endPeriodBtn" style="margin-top:12px;">结束经期</button>
+      </div>
+
+      <div class="card" id="countdownCard">
+        <div class="card-title"><span>距离下次经期</span><span class="badge">预测</span></div>
+        <div><span class="countdown-number" id="countdownDays">12</span><span class="day-label">天</span></div>
+        <div class="predicted-date" id="predictedDateText">预计 5月3日 开始</div>
+        <button class="btn btn-primary btn-block" id="startPeriodBtn" style="margin-top:16px;">开始经期</button>
+      </div>
+
+      <div class="card" id="logProductCard" style="display:none;">
+        <div class="card-title"><span>记录卫生用具</span><span class="badge" id="todayLogCount">今日 0 次</span></div>
+        <div class="product-row" id="productRow">
+          <button class="product-btn selected" data-product="卫生巾">卫生巾</button>
+          <button class="product-btn" data-product="棉条">棉条</button>
+          <button class="product-btn" data-product="护垫">护垫</button>
+        </div>
+        <div style="display:flex; gap:8px; align-items:center; margin:12px 0 8px;">
+          <label style="font-size:14px; color:#6f4f5e; font-weight:500;">时间</label>
+          <input type="time" id="logTimeInput" class="time-input">
+          <button class="btn btn-sm btn-outline" id="setNowBtn">此刻</button>
+        </div>
+        <button class="btn btn-outline btn-block" id="logCurrentTimeBtn" style="margin-top:8px;">记录</button>
+        <div class="timeline" id="timelineContainer"></div>
+      </div>
+
+      <div class="card" id="hintCard" style="display:none;">
+        <div class="empty-text">✨ 点击「开始经期」记录第一天</div>
+      </div>
+    </div>
+
+    <!-- 日历 -->
+    <div class="page" id="pageCalendar">
+      <div class="card">
+        <div class="calendar-header">
+          <button class="btn btn-sm btn-outline" id="prevMonthBtn">←</button>
+          <span style="font-weight:600; font-size:17px;" id="monthYearLabel">2025年4月</span>
+          <button class="btn btn-sm btn-outline" id="nextMonthBtn">→</button>
+        </div>
+        <div class="calendar-grid" id="calendarGrid"></div>
+        <div class="text-small" style="display:flex; gap:16px; justify-content:center; margin-top:16px;">
+          <span><span style="display:inline-block; width:12px; height:12px; background:#d44c7c; border-radius:50%; margin-right:4px;"></span>经期</span>
+          <span><span style="display:inline-block; width:12px; height:12px; border:1.5px dashed #d44c7c; border-radius:50%; margin-right:4px;"></span>预测</span>
+          <span><span style="display:inline-block; width:12px; height:12px; background:#fff; border:2px solid #f8bbd0; border-radius:50%; margin-right:4px;"></span>今天</span>
+        </div>
+      </div>
+      <div class="card" id="selectedDateCard">
+        <div class="card-title"><span id="selectedDateTitle">4月1日</span><span class="badge" id="selectedDateStatus">经期第1天</span></div>
+        <div id="selectedDateContent"></div>
+        <div class="calendar-actions" id="calendarActions"></div>
+      </div>
+    </div>
+
+    <!-- 周期 -->
+    <div class="page" id="pageCycle">
+      <div class="card">
+        <div class="card-title">周期统计</div>
+        <div class="stats-row">
+          <div class="stat-item"><div class="stat-value" id="avgCycle">28</div><div class="stat-label">平均周期长度(天)</div></div>
+          <div class="stat-item"><div class="stat-value" id="avgPeriod">5</div><div class="stat-label">平均月经长度(天)</div></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">补录历史周期</div>
+        <div class="history-form">
+          <input type="date" id="historyStartInput">
+          <input type="date" id="historyEndInput">
+          <button class="btn btn-sm btn-primary" id="addHistoryBtn">添加</button>
+        </div>
+        <div class="history-list" id="historyList"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="tab-bar">
+    <button class="tab-item active" data-page="today">
+      <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+      <span>今天</span>
+    </button>
+    <button class="tab-item" data-page="calendar">
+      <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><circle cx="12" cy="15" r="1" fill="currentColor"/></svg>
+      <span>日历</span>
+    </button>
+    <button class="tab-item" data-page="cycle">
+      <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9"/><path d="M12 6v6l3 2"/><circle cx="18" cy="6" r="2" fill="currentColor"/></svg>
+      <span>周期</span>
+    </button>
+  </div>
+</div>
+
+<script>
+// ============================================================
+//  ⚠️ 替换成你自己的 Supabase 配置
+// ============================================================
+const SUPABASE_URL = 'https://gpiilbciymovvtlicnzm.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_hUuhu_UfWGrUuWhOzTNBNQ_9fRutLFE';
+
+const { createClient } = supabase;
+const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const $ = (id) => document.getElementById(id);
+
+// ---------- 全局状态 ----------
+let currentUser = null;
+let periods = [];       // [{id, start_date, end_date}]
+let productLogs = [];   // [{id, log_date, log_time, product}]
+let selectedProduct = '卫生巾';
+let selectedCalendarDate = new Date();
+let currentCalendarMonth = new Date().getMonth();
+let currentCalendarYear = new Date().getFullYear();
+
+// ---------- 工具 ----------
+const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const parseDate = (s) => { const [y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d); };
+const addDays = (date, days) => { const d = new Date(date); d.setDate(d.getDate()+days); return d; };
+const diffDays = (a,b) => { const t1=new Date(a).setHours(0,0,0,0); const t2=new Date(b).setHours(0,0,0,0); return Math.round((t2-t1)/86400000); };
+const todayStr = () => fmt(new Date());
+const nowTime = () => { const n=new Date(); return `${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}`; };
+
+// ---------- 周期计算（跟旧版一致） ----------
+function getActivePeriod() { return periods.find(p => !p.end_date) || null; }
+function getCompleted() { return periods.filter(p => p.end_date).sort((a,b) => a.start_date.localeCompare(b.start_date)); }
+function calcAvgCycle() {
+  const c = getCompleted();
+  if (c.length < 2) return 28;
+  let t=0;
+  for (let i=1;i<c.length;i++) t += diffDays(parseDate(c[i-1].start_date), parseDate(c[i].start_date));
+  return Math.round(t/(c.length-1));
+}
+function calcAvgPeriod() {
+  const c = getCompleted();
+  if (!c.length) return 5;
+  let t=0;
+  c.forEach(p => t += diffDays(parseDate(p.start_date), parseDate(p.end_date)) + 1);
+  return Math.round(t/c.length);
+}
+function predictNext() {
+  const c = getCompleted();
+  if (!c.length) return addDays(new Date(), 28);
+  return addDays(parseDate(c[c.length-1].start_date), calcAvgCycle());
+}
+function isInPeriod(dateStr) {
+  return periods.some(p => {
+    const end = p.end_date || todayStr();
+    return dateStr >= p.start_date && dateStr <= end;
+  });
+}
+function isPredicted(dateStr) {
+  if (getActivePeriod()) return false;
+  const next = predictNext();
+  const avg = calcAvgPeriod();
+  return dateStr >= fmt(next) && dateStr <= fmt(addDays(next, avg-1));
+}
+
+// ============================================================
+//  认证
+// ============================================================
+let isSignup = false;
+$('toggleMode').onclick = () => {
+  isSignup = !isSignup;
+  $('authSub').textContent = isSignup ? '注册新账号' : '登录你的账号，数据云端同步';
+  $('loginBtn').textContent = isSignup ? '注册' : '登录';
+  $('signupBtn').classList.toggle('hidden', !isSignup);
+  $('toggleMode').textContent = isSignup ? '已有账号？去登录' : '没有账号？去注册';
+  $('authMsg').textContent = '';
+};
+const showAuthMsg = (txt, cls) => { const el = $('authMsg'); el.textContent = txt; el.className = 'msg ' + (cls||''); };
+
+$('loginBtn').onclick = async () => {
+  const email = $('emailInput').value.trim();
+  const pwd = $('passwordInput').value;
+  if (!email || !pwd) return showAuthMsg('请填写邮箱和密码', 'error');
+  $('loginBtn').disabled = true;
+  if (isSignup) {
+    const { error } = await sb.auth.signUp({ email, password: pwd });
+    $('loginBtn').disabled = false;
+    if (error) return showAuthMsg(error.message, 'error');
+    showAuthMsg('注册成功！现在可以登录了', 'ok');
+  } else {
+    const { error } = await sb.auth.signInWithPassword({ email, password: pwd });
+    $('loginBtn').disabled = false;
+    if (error) return showAuthMsg('登录失败：' + error.message, 'error');
+  }
+};
+$('signupBtn').onclick = () => $('loginBtn').click();
+$('logoutBtn').onclick = async () => { await sb.auth.signOut(); };
+
+// ---------- 登录状态变化 ----------
+sb.auth.onAuthStateChange(async (event, session) => {
+  if (session && session.user) {
+    currentUser = session.user;
+    $('authCard').classList.add('hidden');
+    $('appRoot').classList.remove('hidden');
+    await loadData();
+    renderAll();
+    $('logTimeInput').value = nowTime();
+  } else {
+    currentUser = null;
+    $('appRoot').classList.add('hidden');
+    $('authCard').classList.remove('hidden');
+  }
+});
+
+// ============================================================
+//  数据读写（全部走云端）
+// ============================================================
+async function loadData() {
+  const uid = currentUser.id;
+  const [pRes, lRes] = await Promise.all([
+    sb.from('periods').select('*').eq('user_id', uid).order('start_date', {ascending:true}),
+    sb.from('product_logs').select('*').eq('user_id', uid).order('log_date', {ascending:true})
+  ]);
+  if (pRes.error) console.error('periods 加载失败', pRes.error);
+  if (lRes.error) console.error('logs 加载失败', lRes.error);
+  periods = pRes.data || [];
+  productLogs = lRes.data || [];
+}
+
+async function startPeriod(dateStr) {
+  const uid = currentUser.id;
+  const { error } = await sb.from('periods').insert({ user_id: uid, start_date: dateStr, end_date: null });
+  if (error) return alert('保存失败：' + error.message);
+  await loadData(); renderAll();
+}
+async function endPeriod(periodId, dateStr) {
+  const { error } = await sb.from('periods').update({ end_date: dateStr }).eq('id', periodId);
+  if (error) return alert('保存失败：' + error.message);
+  await loadData(); renderAll();
+}
+async function deletePeriod(periodId) {
+  if (!confirm('删除此经期记录？')) return;
+  const { error } = await sb.from('periods').delete().eq('id', periodId);
+  if (error) return alert('删除失败：' + error.message);
+  await loadData(); renderAll();
+}
+async function addHistory(start, end) {
+  const uid = currentUser.id;
+  const { error } = await sb.from('periods').insert({ user_id: uid, start_date: start, end_date: end });
+  if (error) return alert('保存失败：' + error.message);
+  await loadData(); renderAll();
+}
+async function addLog(dateStr, timeStr, product) {
+  const uid = currentUser.id;
+  const { error } = await sb.from('product_logs').insert({
+    user_id: uid, log_date: dateStr, log_time: timeStr, product
+  });
+  if (error) return alert('记录失败：' + error.message);
+  await loadData(); renderToday();
+}
+async function deleteLog(logId) {
+  if (!confirm('删除这条记录？')) return;
+  const { error } = await sb.from('product_logs').delete().eq('id', logId);
+  if (error) return alert('删除失败：' + error.message);
+  await loadData(); renderToday();
+}
+
+// ============================================================
+//  渲染
+// ============================================================
+function renderToday() {
+  const active = getActivePeriod();
+  const todayS = todayStr();
+
+  $('periodActiveCard').style.display = active ? 'block' : 'none';
+  $('logProductCard').style.display = active ? 'block' : 'none';
+  $('countdownCard').style.display = active ? 'none' : 'block';
+  $('hintCard').style.display = active ? 'none' : 'block';
+
+  if (active) {
+    const start = parseDate(active.start_date);
+    const days = diffDays(start, new Date()) + 1;
+    const avgP = calcAvgPeriod();
+    const pct = Math.min(100, (days/avgP)*100);
+    $('periodDay').textContent = days;
+    $('periodBadge').textContent = `第${days}天`;
+    $('periodProgressFill').style.width = pct + '%';
+    $('periodStartLabel').textContent = `开始于 ${start.getMonth()+1}月${start.getDate()}日`;
+    const left = Math.max(0, avgP - days);
+    $('periodEndLabel').textContent = left > 0 ? `预计 ${left}天后结束` : '即将结束';
+  } else {
+    const next = predictNext();
+    const t = new Date(); t.setHours(0,0,0,0);
+    const days = diffDays(t, next);
+    $('countdownDays').textContent = Math.max(0, days);
+    $('predictedDateText').textContent = `预计 ${next.getMonth()+1}月${next.getDate()}日 开始`;
+  }
+
+  // 今日卫生用具记录
+  const todayLogs = productLogs.filter(l => l.log_date === todayS).sort((a,b) => a.log_time.localeCompare(b.log_time));
+  $('todayLogCount').textContent = `今日 ${todayLogs.length} 次`;
+  const tl = $('timelineContainer');
+  if (active) {
+    tl.innerHTML = todayLogs.length === 0
+      ? '<div class="empty-text">还没有记录，点击上方按钮记录</div>'
+      : todayLogs.map(l => `
+        <div class="timeline-item">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <span class="timeline-time">${l.log_time}</span>
+            <span class="timeline-product">${l.product}</span>
+          </div>
+          <button class="icon-btn delete-log" data-id="${l.id}">✕</button>
+        </div>`).join('');
+  }
+}
+
+function renderCalendar() {
+  const year = currentCalendarYear, month = currentCalendarMonth;
+  const first = new Date(year, month, 1);
+  const startW = first.getDay();
+  const days = new Date(year, month+1, 0).getDate();
+  $('monthYearLabel').textContent = `${year}年${month+1}月`;
+
+  const grid = $('calendarGrid');
+  let html = '';
+  ['日','一','二','三','四','五','六'].forEach(d => html += `<div class="weekday">${d}</div>`);
+  for (let i = 0; i < startW; i++) html += `<div class="calendar-day empty"></div>`;
+  for (let d = 1; d <= days; d++) {
+    const ds = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    let cls = 'calendar-day';
+    if (isInPeriod(ds)) cls += ' period-solid';
+    else if (isPredicted(ds)) cls += ' predicted';
+    if (ds === todayStr()) cls += ' today';
+    html += `<div class="${cls}" data-date="${ds}">${d}</div>`;
+  }
+  grid.innerHTML = html;
+  grid.querySelectorAll('.calendar-day[data-date]').forEach(el => {
+    el.addEventListener('click', () => {
+      selectedCalendarDate = parseDate(el.dataset.date);
+      renderCalendar(); renderSelectedDateDetail();
+    });
+    if (el.dataset.date === fmt(selectedCalendarDate)) {
+      el.style.outline = '2px solid #d44c7c';
+      el.style.outlineOffset = '2px';
+    } else {
+      el.style.outline = 'none';
+    }
+  });
+}
+
+function renderSelectedDateDetail() {
+  const ds = fmt(selectedCalendarDate);
+  const obj = selectedCalendarDate;
+  $('selectedDateTitle').textContent = `${obj.getMonth()+1}月${obj.getDate()}日`;
+
+  let status = '普通日';
+  let periodForDate = null;
+  if (isInPeriod(ds)) {
+    periodForDate = periods.find(p => {
+      const end = p.end_date || todayStr();
+      return ds >= p.start_date && ds <= end;
+    });
+    const idx = diffDays(parseDate(periodForDate.start_date), obj) + 1;
+    status = `经期第${idx}天`;
+  } else if (isPredicted(ds)) {
+    status = '预测经期';
+  }
+  $('selectedDateStatus').textContent = status;
+
+  const logs = productLogs.filter(l => l.log_date === ds);
+  $('selectedDateContent').innerHTML = logs.length
+    ? '<div style="font-size:14px;font-weight:500;margin-bottom:8px;">卫生用具记录</div>' +
+      logs.map(l => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f5e6ec;">${l.log_time} · ${l.product}</div>`).join('')
+    : '<div class="empty-text">当天无卫生用具记录</div>';
+
+  const actions = $('calendarActions');
+  let html = '';
+  const active = getActivePeriod();
+  if (periodForDate) {
+    if (!periodForDate.end_date && ds >= periodForDate.start_date) {
+      html += `<button class="btn btn-sm btn-primary" id="endPeriodOnDateBtn" data-date="${ds}">结束经期于这一天</button>`;
+    } else if (periodForDate.end_date) {
+      html += `<button class="btn btn-sm btn-outline" id="deletePeriodOnDateBtn" data-id="${periodForDate.id}">删除此经期记录</button>`;
+    }
+  } else if (!active) {
+    html += `<button class="btn btn-sm btn-primary" id="startPeriodOnDateBtn" data-date="${ds}">开始经期于这一天</button>`;
+  } else if (ds >= active.start_date) {
+    html += `<button class="btn btn-sm btn-outline" id="setPeriodEndOnDateBtn" data-date="${ds}">将经期结束设为这一天</button>`;
+  }
+  actions.innerHTML = html;
+}
+
+function renderCycle() {
+  $('avgCycle').textContent = calcAvgCycle();
+  $('avgPeriod').textContent = calcAvgPeriod();
+
+  const c = getCompleted();
+  const list = $('historyList');
+  if (!c.length) {
+    list.innerHTML = '<div class="empty-text">暂无历史周期</div>';
+    return;
+  }
+  const sorted = [...c].sort((a,b) => a.start_date.localeCompare(b.start_date));
+  list.innerHTML = sorted.map((p, i) => {
+    const pd = diffDays(parseDate(p.start_date), parseDate(p.end_date)) + 1;
+    const cl = i < sorted.length - 1 ? diffDays(parseDate(p.start_date), parseDate(sorted[i+1].start_date)) : '—';
+    return `<div class="history-item">
+      <div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;">
+        <span style="font-weight:500;color:#3d2c3b;">${p.start_date} ~ ${p.end_date}</span>
+        <span style="font-size:12px;color:#8f6f7e;">(${pd}天经期)</span>
+        <span class="cycle-length">周期 ${cl}天</span>
+      </div>
+      <div class="history-actions"><button class="delete-period" data-id="${p.id}">🗑️</button></div>
+    </div>`;
+  }).join('');
+}
+
+function renderAll() {
+  renderToday(); renderCalendar(); renderSelectedDateDetail(); renderCycle();
+}
+
+// ============================================================
+//  事件绑定
+// ============================================================
+// Tab 切换
+document.querySelectorAll('.tab-item').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    const p = tab.dataset.page;
+    document.querySelectorAll('.page').forEach(x => x.classList.remove('active'));
+    $('page' + p.charAt(0).toUpperCase() + p.slice(1)).classList.add('active');
+    if (p === 'calendar') { renderCalendar(); renderSelectedDateDetail(); }
+    else if (p === 'cycle') renderCycle();
+    else renderToday();
+  });
+});
+
+// 今天页按钮
+$('startPeriodBtn').onclick = () => {
+  if (getActivePeriod()) return alert('已有进行中的经期，请先结束');
+  startPeriod(todayStr());
+};
+$('endPeriodBtn').onclick = () => {
+  const a = getActivePeriod(); if (!a) return;
+  endPeriod(a.id, todayStr());
+};
+
+// 卫生用具
+document.querySelectorAll('.product-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.product-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    selectedProduct = btn.dataset.product;
+  });
+});
+$('setNowBtn').onclick = () => { $('logTimeInput').value = nowTime(); };
+$('logCurrentTimeBtn').onclick = () => {
+  if (!getActivePeriod()) return alert('请先开始经期');
+  const t = $('logTimeInput').value;
+  if (!t || !/^\d{1,2}:\d{2}$/.test(t)) return alert('请选择有效的时间');
+  let [h,m] = t.split(':').map(Number);
+  if (h<0||h>23||m<0||m>59) return alert('时间无效');
+  addLog(todayStr(), `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`, selectedProduct);
+};
+$('timelineContainer').addEventListener('click', (e) => {
+  const btn = e.target.closest('.delete-log');
+  if (btn) deleteLog(btn.dataset.id);
+});
+
+// 日历月份切换
+$('prevMonthBtn').onclick = () => {
+  currentCalendarMonth--;
+  if (currentCalendarMonth < 0) { currentCalendarMonth = 11; currentCalendarYear--; }
+  renderCalendar();
+};
+$('nextMonthBtn').onclick = () => {
+  currentCalendarMonth++;
+  if (currentCalendarMonth > 11) { currentCalendarMonth = 0; currentCalendarYear++; }
+  renderCalendar();
+};
+
+// 日历操作
+$('calendarActions').addEventListener('click', (e) => {
+  const t = e.target.closest('button'); if (!t) return;
+  const date = t.dataset.date, id = t.dataset.id;
+  if (t.id === 'startPeriodOnDateBtn') {
+    if (getActivePeriod()) return alert('已有进行中的经期，请先结束');
+    startPeriod(date);
+  }
+  if (t.id === 'endPeriodOnDateBtn' || t.id === 'setPeriodEndOnDateBtn') {
+    const a = getActivePeriod(); if (!a) return;
+    if (date < a.start_date) return alert('结束日期不能早于开始日期');
+    endPeriod(a.id, date);
+  }
+  if (t.id === 'deletePeriodOnDateBtn') deletePeriod(id);
+});
+
+// 补录历史
+$('addHistoryBtn').onclick = () => {
+  const s = $('historyStartInput').value;
+  const e = $('historyEndInput').value;
+  if (!s || !e) return alert('请选择开始和结束日期');
+  if (s > e) return alert('结束日期不能早于开始日期');
+  if (periods.some(p => {
+    const pe = p.end_date || todayStr();
+    return s <= pe && e >= p.start_date;
+  })) return alert('该时间段与已有记录重叠');
+  addHistory(s, e);
+  $('historyStartInput').value = '';
+  $('historyEndInput').value = '';
+};
+
+// 删除历史
+$('historyList').addEventListener('click', (e) => {
+  const btn = e.target.closest('.delete-period');
+  if (btn) deletePeriod(btn.dataset.id);
+});
+</script>
+
+<!-- Service Worker 注册（可选，离线用） -->
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(err => console.error('SW 注册失败', err));
+  });
+}
+</script>
+</body>
+</html>
