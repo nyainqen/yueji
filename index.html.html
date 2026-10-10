@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>月迹 · 云同步版</title>
+<meta name="theme-color" content="#d44c7c">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; font-family: system-ui, -apple-system, sans-serif; }
+  body { background:#f8f5f7; min-height:100vh; display:flex; justify-content:center; align-items:center; padding:16px; }
+  .card { background:#fff; border-radius:24px; padding:28px 22px; width:100%; max-width:380px;
+          box-shadow:0 10px 30px rgba(210,160,180,0.15); border:1px solid #f5e6ec; }
+  h1 { font-size:22px; color:#3d2c3b; margin-bottom:6px; text-align:center; }
+  .sub { font-size:13px; color:#8f6f7e; text-align:center; margin-bottom:22px; }
+  input { width:100%; padding:12px 14px; border-radius:14px; border:1.5px solid #f0d8e2;
+          font-size:15px; margin-bottom:12px; outline:none; }
+  input:focus { border-color:#d44c7c; }
+  button { width:100%; padding:13px; border-radius:40px; border:none; font-size:15px;
+           font-weight:500; cursor:pointer; background:#d44c7c; color:#fff;
+           box-shadow:0 4px 12px rgba(212,76,124,0.3); }
+  button:active { background:#b83e6a; }
+  .link { text-align:center; font-size:13px; color:#b34167; margin-top:14px; cursor:pointer; }
+  .msg { text-align:center; font-size:13px; margin-top:12px; min-height:18px; }
+  .msg.error { color:#c0392b; }
+  .msg.ok { color:#27ae60; }
+  .hidden { display:none; }
+  /* 登录后主界面 */
+  .app { width:100%; max-width:400px; }
+  .topbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; }
+  .topbar .title { font-size:20px; font-weight:600; color:#3d2c3b; }
+  .topbar .logout { font-size:13px; color:#b34167; cursor:pointer; background:none; border:none;
+                    width:auto; padding:6px 10px; box-shadow:none; }
+  .big-card { background:#fff; border-radius:24px; padding:22px 18px; margin-bottom:14px;
+              box-shadow:0 4px 16px rgba(210,160,180,0.12); border:1px solid #f5e6ec; }
+  .day-num { font-size:44px; font-weight:700; color:#d44c7c; }
+  .day-lbl { font-size:14px; color:#8f6f7e; margin-left:6px; }
+  .badge { display:inline-block; background:#fce4ec; color:#b34167; font-size:12px;
+           padding:4px 10px; border-radius:20px; }
+  .btn-secondary { background:#fce4ec; color:#b34167; box-shadow:none; margin-top:12px; }
+</style>
+</head>
+<body>
+
+<!-- ========== 登录/注册页面 ========== -->
+<div class="card" id="authCard">
+  <h1>月迹</h1>
+  <div class="sub" id="authSub">登录你的账号，数据云端同步</div>
+
+  <input type="email" id="emailInput" placeholder="邮箱" autocomplete="email">
+  <input type="password" id="passwordInput" placeholder="密码（至少 6 位）" autocomplete="current-password">
+
+  <button id="loginBtn">登录</button>
+  <button id="signupBtn" class="hidden" style="background:#fce4ec;color:#b34167;box-shadow:none;margin-top:10px;">注册新账号</button>
+
+  <div class="link" id="toggleMode">没有账号？去注册</div>
+  <div class="msg" id="authMsg"></div>
+</div>
+
+<!-- ========== 主界面（登录后显示） ========== -->
+<div class="app hidden" id="appView">
+  <div class="topbar">
+    <div class="title">月迹</div>
+    <button class="logout" id="logoutBtn">退出登录</button>
+  </div>
+
+  <div class="big-card" id="statusCard">
+    <div id="statusContent">加载中…</div>
+  </div>
+
+  <div class="big-card">
+    <div style="font-size:14px; color:#8f6f7e; margin-bottom:10px;">当前账号</div>
+    <div id="userEmail" style="font-size:14px; color:#3d2c3b; word-break:break-all;"></div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+//  ⚠️ 把下面两行替换成你在 Supabase 项目里拿到的值
+// ============================================================
+const SUPABASE_URL = 'https://gpiilbciymovvtlicnzm.supabase.co';
+const SUPABASE_ANON_KEY = ' sb_publishable_hUuhu_UfWGrUuWhOzTNBNQ_9fRutLFE';
+
+const { createClient } = supabase;
+const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ---------- 工具 ----------
+const $ = (id) => document.getElementById(id);
+const showMsg = (el, text, type) => { el.textContent = text; el.className = 'msg ' + (type || ''); };
+const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const today = () => fmt(new Date());
+
+// ---------- UI 切换 ----------
+let isSignup = false;
+$('toggleMode').onclick = () => {
+  isSignup = !isSignup;
+  $('authSub').textContent = isSignup ? '注册新账号' : '登录你的账号，数据云端同步';
+  $('loginBtn').textContent = isSignup ? '注册' : '登录';
+  $('signupBtn').classList.toggle('hidden', !isSignup);
+  $('toggleMode').textContent = isSignup ? '已有账号？去登录' : '没有账号？去注册';
+  showMsg($('authMsg'), '', '');
+};
+
+// ---------- 登录 ----------
+$('loginBtn').onclick = async () => {
+  const email = $('emailInput').value.trim();
+  const pwd = $('passwordInput').value;
+  if (!email || !pwd) return showMsg($('authMsg'), '请填写邮箱和密码', 'error');
+
+  $('loginBtn').disabled = true;
+  if (isSignup) {
+    const { error } = await sb.auth.signUp({ email, password: pwd });
+    $('loginBtn').disabled = false;
+    if (error) return showMsg($('authMsg'), error.message, 'error');
+    showMsg($('authMsg'), '注册成功！如果开启邮箱验证，请去邮箱确认后再登录', 'ok');
+  } else {
+    const { error } = await sb.auth.signInWithPassword({ email, password: pwd });
+    $('loginBtn').disabled = false;
+    if (error) return showMsg($('authMsg'), '登录失败：' + error.message, 'error');
+    // 成功后 onAuthStateChange 会自动切换界面
+  }
+};
+
+$('signupBtn').onclick = () => $('loginBtn').click();
+
+// ---------- 退出 ----------
+$('logoutBtn').onclick = async () => {
+  await sb.auth.signOut();
+};
+
+// ---------- 监听登录状态 ----------
+sb.auth.onAuthStateChange(async (event, session) => {
+  if (session && session.user) {
+    $('authCard').classList.add('hidden');
+    $('appView').classList.remove('hidden');
+    $('userEmail').textContent = session.user.email;
+    await renderStatus(session.user.id);
+  } else {
+    $('appView').classList.add('hidden');
+    $('authCard').classList.remove('hidden');
+  }
+});
+
+// ---------- 读取并渲染当前状态 ----------
+async function renderStatus(userId) {
+  $('statusContent').innerHTML = '加载中…';
+
+  // 拉取该用户所有经期记录
+  const { data: periods, error } = await sb
+    .from('periods')
+    .select('*')
+    .eq('user_id', userId)
+    .order('start_date', { ascending: false });
+
+  if (error) {
+    $('statusContent').innerHTML = '读取失败：' + error.message;
+    return;
+  }
+
+  const active = periods.find(p => p.end_date === null);
+
+  if (active) {
+    const start = new Date(active.start_date);
+    const days = Math.floor((new Date() - start) / 86400000) + 1;
+    $('statusContent').innerHTML = `
+      <div class="badge">经期第 ${days} 天</div>
+      <div style="margin-top:12px;">
+        <span class="day-num">${days}</span><span class="day-lbl">天</span>
+      </div>
+      <button class="btn-secondary" id="endBtn" style="width:100%;padding:12px;border:none;border-radius:40px;
+              font-size:15px;cursor:pointer;">结束经期</button>
+    `;
+    $('endBtn').onclick = async () => {
+      await sb.from('periods').update({ end_date: today() }).eq('id', active.id);
+      renderStatus(userId);
+    };
+  } else {
+    const last = periods[0];
+    let predicted = '—';
+    if (last) {
+      const lastStart = new Date(last.start_date);
+      // 简单预测：上一次开始 + 28 天
+      const next = new Date(lastStart); next.setDate(next.getDate() + 28);
+      const days = Math.ceil((next - new Date()) / 86400000);
+      predicted = days > 0 ? `预计 ${days} 天后开始` : '可能即将来临';
+    }
+    $('statusContent').innerHTML = `
+      <div class="badge">距离下次经期</div>
+      <div style="margin-top:12px; font-size:16px; color:#3d2c3b;">${predicted}</div>
+      <button class="btn-secondary" id="startBtn" style="width:100%;padding:12px;border:none;border-radius:40px;
+              font-size:15px;cursor:pointer;">开始经期</button>
+    `;
+    $('startBtn').onclick = async () => {
+      await sb.from('periods').insert({ user_id: userId, start_date: today(), end_date: null });
+      renderStatus(userId);
+    };
+  }
+}
+</script>
+</body>
+</html>
